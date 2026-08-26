@@ -36,6 +36,10 @@ export function login(email: string, password: string) {
   })
 }
 
+export function getCurrentUser() {
+  return request<{ id: string; email: string; name: string }>('/auth/me')
+}
+
 export function register(name: string, email: string, password: string) {
   return request<{ id: string; email: string; name: string }>('/auth/register', {
     method: 'POST', body: JSON.stringify({ name, email, password }),

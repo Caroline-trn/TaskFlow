@@ -1,7 +1,11 @@
-import { Body, Controller, Post, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
+import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { JwtAuthGuard } from './jwt-auth.guard';
+
+type AuthenticatedRequest = Request & { user: { userId: string } };
 
 @Controller('auth')
 export class AuthController {
@@ -20,9 +24,20 @@ export class AuthController {
     );
 
     if (!user) {
-      throw new UnauthorizedException('Email ou mot de passe incorrect');
+      const exists = await this.authService.accountExists(loginDto.email);
+      throw new UnauthorizedException(
+        exists
+          ? 'Mot de passe incorrect.'
+          : 'Aucun compte n’est inscrit avec cette adresse email.',
+      );
     }
 
     return this.authService.login(user);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  me(@Req() request: AuthenticatedRequest) {
+    return this.authService.getCurrentUser(request.user.userId);
   }
 }
