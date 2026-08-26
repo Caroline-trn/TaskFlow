@@ -30,6 +30,12 @@ export class User {
   @Column({ default: false })
   darkMode!: boolean;
 
+  @Column({ nullable: true, select: false })
+  resetTokenHash!: string | null;
+
+  @Column({ type: 'timestamp', nullable: true, select: false })
+  resetTokenExpiresAt!: Date | null;
+
   @OneToMany('Task', 'user')
   tasks!: Task[];
 }

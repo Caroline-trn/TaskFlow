@@ -45,6 +45,8 @@ export function register(name: string, email: string, password: string) {
     method: 'POST', body: JSON.stringify({ name, email, password }),
   })
 }
+export function forgotPassword(email: string) { return request<{ message: string; resetToken?: string }>('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }) }
+export function resetPassword(token: string, password: string) { return request<{ message: string }>('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) }) }
 
 export function getTasks(archived = false) { return request<ApiTask[]>(`/tasks${archived ? '?archived=true' : ''}`) }
 export function createTask(title: string, priority: ApiTask['priority'], dueDate?: string, description?: string) { return request<ApiTask>('/tasks', { method: 'POST', body: JSON.stringify({ title, priority, dueDate, description }) }) }

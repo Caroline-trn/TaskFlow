@@ -19,6 +19,20 @@ export class UsersService {
     return await this.usersRepository.findOne({ where: { email } });
   }
 
+  async findByResetToken(tokenHash: string): Promise<User | null> {
+    return await this.usersRepository
+      .createQueryBuilder('user')
+      .addSelect(['user.resetTokenHash', 'user.resetTokenExpiresAt'])
+      .where('user.resetTokenHash = :tokenHash', { tokenHash })
+      .andWhere('user.resetTokenExpiresAt > :now', { now: new Date() })
+      .getOne();
+  }
+
+  async update(user: User, data: Partial<User>): Promise<User> {
+    Object.assign(user, data);
+    return this.usersRepository.save(user);
+  }
+
   async findById(id: string): Promise<User> {
     const user = await this.usersRepository.findOne({ where: { id } });
     if (!user) {

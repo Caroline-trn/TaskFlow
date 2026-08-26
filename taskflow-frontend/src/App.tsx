@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, LogOut, Pencil, Plus, Trash2, X } from 'lucide-react'
 import './App.css'
-import { createTask, deleteTask, getCurrentUser, getTasks, login, register, updateTask, type ApiTask } from './api'
+import { createTask, deleteTask, forgotPassword, getCurrentUser, getTasks, login, register, resetPassword, updateTask, type ApiTask } from './api'
 
 type Filter = 'all' | 'today' | 'completed'
 
@@ -22,6 +22,9 @@ function App() {
   const [editDueDate, setEditDueDate] = useState('')
   const [authOpen, setAuthOpen] = useState(false)
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
+  const [forgotMode, setForgotMode] = useState(false)
+  const [resetToken, setResetToken] = useState('')
+  const [resetMode, setResetMode] = useState(false)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -41,6 +44,15 @@ function App() {
       localStorage.removeItem('taskflow_token')
       setMessage('Votre session a expiré.')
     })
+  }, [])
+
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get('resetToken')
+    if (token) {
+      setResetToken(token)
+      setResetMode(true)
+      setAuthOpen(true)
+    }
   }, [])
 
   const visibleTasks = useMemo(() => tasks.filter((task) => {
@@ -76,6 +88,16 @@ function App() {
     try { if (authMode === 'register') await register(name.trim(), email.trim(), password); const result = await login(email.trim(), password); localStorage.setItem('taskflow_token', result.access_token); setUser(result.user); setAuthOpen(false); setPassword(''); await loadTasks() } catch (error) { setAuthError(error instanceof Error ? error.message : 'Connexion impossible.') } finally { setLoading(false) }
   }
 
+  async function requestReset() {
+    setAuthError('')
+    try { const result = await forgotPassword(email.trim()); setAuthError(result.message); if (result.resetToken) { setResetToken(result.resetToken); setResetMode(true) } } catch (error) { setAuthError(error instanceof Error ? error.message : 'Demande impossible.') }
+  }
+
+  async function applyReset() {
+    setAuthError('')
+    try { const result = await resetPassword(resetToken, password); setAuthError(result.message); setResetMode(false); setForgotMode(false); setAuthMode('login'); setPassword(''); window.history.replaceState({}, '', window.location.pathname) } catch (error) { setAuthError(error instanceof Error ? error.message : 'Réinitialisation impossible.') }
+  }
+
   function logout() { if (window.confirm('Voulez-vous vraiment vous déconnecter ?')) { localStorage.removeItem('taskflow_token'); setUser(null); setTasks([]) } }
 
   return <main className="todo-app">
@@ -85,7 +107,7 @@ function App() {
     <nav className="todo-filters"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>Toutes <b>{tasks.length}</b></button><button className={filter === 'today' ? 'active' : ''} onClick={() => setFilter('today')}>Aujourd’hui</button><button className={filter === 'completed' ? 'active' : ''} onClick={() => setFilter('completed')}>Terminées</button><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher" /></nav>
     {!user ? <div className="empty welcome"><h2>Vos tâches, simplement.</h2><p>Connectez-vous pour créer et retrouver vos tâches.</p><button className="primary" onClick={() => setAuthOpen(true)}>Commencer</button></div> : <section className="task-list">{visibleTasks.length === 0 ? <div className="empty"><h2>Aucune tâche ici</h2><p>Ajoutez une tâche pour commencer.</p></div> : visibleTasks.map((task) => <article className={`todo-row ${task.status === 'terminee' ? 'is-done' : ''}`} key={task.id}><button className="check" onClick={() => void toggleTask(task)} aria-label="Terminer">{task.status === 'terminee' && <Check size={15} />}</button><div className="task-copy"><strong>{task.title}</strong><small>{task.dueDate ? `Échéance : ${task.dueDate}` : 'Sans échéance'} · {task.priority}</small></div><button className="row-action" onClick={() => openEdit(task)} title="Modifier" aria-label="Modifier"><Pencil size={16} /></button><button className="row-action danger" onClick={() => void removeTask(task)} title="Supprimer" aria-label="Supprimer"><Trash2 size={16} /></button></article>)}</section>}
     {editing && <div className="modal-backdrop"><div className="modal"><div className="modal-title"><h2>Modifier la tâche</h2><button onClick={() => setEditing(null)} aria-label="Fermer"><X size={18} /></button></div><label>Titre<input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} /></label><label>Description<textarea value={editDescription} onChange={(event) => setEditDescription(event.target.value)} /></label><div className="form-grid"><label>Statut<select value={editStatus} onChange={(event) => setEditStatus(event.target.value as ApiTask['status'])}><option value="en_attente">À faire</option><option value="en_cours">En cours</option><option value="terminee">Terminée</option></select></label><label>Priorité<select value={editPriority} onChange={(event) => setEditPriority(event.target.value as ApiTask['priority'])}><option value="basse">Basse</option><option value="moyenne">Moyenne</option><option value="haute">Haute</option></select></label></div><label>Échéance<input type="date" value={editDueDate} onChange={(event) => setEditDueDate(event.target.value)} /></label><button className="primary full" onClick={() => void saveEdit()}>Enregistrer</button></div></div>}
-    {authOpen && <div className="modal-backdrop"><div className="modal"><div className="modal-title"><h2>{authMode === 'login' ? 'Se connecter' : 'Créer un compte'}</h2><button onClick={() => { setAuthOpen(false); setAuthError('') }} aria-label="Fermer"><X size={18} /></button></div>{authError && <div className="auth-error" role="alert">{authError}</div>}{authMode === 'register' && <label>Nom<input value={name} onChange={(event) => setName(event.target.value)} /></label>}<label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>Mot de passe<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && void connect()} /></label><button className="primary full" onClick={() => void connect()} disabled={loading}>{authMode === 'login' ? 'Se connecter' : 'Créer mon compte'}</button><button className="switch-auth" onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError('') }}>{authMode === 'login' ? 'Créer un compte' : 'J’ai déjà un compte'}</button></div></div>}
+    {authOpen && <div className="modal-backdrop"><div className="modal"><div className="modal-title"><h2>{resetMode ? 'Nouveau mot de passe' : forgotMode ? 'Mot de passe oublié' : authMode === 'login' ? 'Se connecter' : 'Créer un compte'}</h2><button onClick={() => { setAuthOpen(false); setAuthError('') }} aria-label="Fermer"><X size={18} /></button></div>{authError && <div className="auth-error" role="alert">{authError}</div>}{resetMode ? <><label>Jeton de réinitialisation<input value={resetToken} onChange={(event) => setResetToken(event.target.value)} /></label><label>Nouveau mot de passe<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label><button className="primary full" onClick={() => void applyReset()}>Réinitialiser</button></> : forgotMode ? <><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label><button className="primary full" onClick={() => void requestReset()}>Envoyer la demande</button><button className="switch-auth" onClick={() => { setForgotMode(false); setAuthError('') }}>Retour à la connexion</button></> : <><>{authMode === 'register' && <label>Nom<input value={name} onChange={(event) => setName(event.target.value)} /></label>}</><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>Mot de passe<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && void connect()} /></label><button className="primary full" onClick={() => void connect()} disabled={loading}>{authMode === 'login' ? 'Se connecter' : 'Créer mon compte'}</button>{authMode === 'login' && <button className="switch-auth" onClick={() => { setForgotMode(true); setAuthError('') }}>Mot de passe oublié ?</button>}<button className="switch-auth" onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError('') }}>{authMode === 'login' ? 'Créer un compte' : 'J’ai déjà un compte'}</button></>}</div></div>}
   </main>
 }
 
